@@ -1,4 +1,37 @@
 import React, { useState } from 'react';
+import axios from 'axios';
+
+// Configuration de base d'Axios
+const axiosInstance = axios.create({
+  baseURL: 'https://api.prod.jcloudify.com',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+axiosInstance.interceptors.request.use(
+  (config) => {
+    const API_KEY = import.meta.env.VITE_AWS_WAF_API_KEY;
+    if (API_KEY) {
+      config.headers['Authorization'] = `Bearer ${API_KEY}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+axiosInstance.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 403) {
+      return Promise.reject({ isForbidden: true });
+    }
+    if (error.response && error.response.status === 405) {
+      return Promise.reject({ captchaRequired: true });
+    }
+    return Promise.reject(error);
+  }
+);
 
 const App: React.FC = () => {
   const [number, setNumber] = useState<number | null>(null);
@@ -13,18 +46,28 @@ const App: React.FC = () => {
       return;
     }
 
-    setOutput(''); // Clear previous output
+    setOutput('');
     setIsRunning(true);
     setCaptchaRequired(false);
 
     for (let i = 1; i <= number; i++) {
       if (captchaRequired) {
-        // Pause until CAPTCHA is resolved
         await handleCaptcha();
       }
 
-      await fetchSequence(i);
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Delay 1 second
+      try {
+        await fetchSequence(i);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      } catch (error: any) {
+        if (error.captchaRequired) {
+          setCaptchaRequired(true);
+        } else if (error.isForbidden) {
+          setOutput((prev) => `${prev}${i}. Forbidden\n`);
+        } else {
+          console.error(`Error fetching sequence at index ${i}:`, error);
+          setOutput((prev) => `${prev}${i}. Error\n`);
+        }
+      }
     }
 
     setIsRunning(false);
@@ -32,30 +75,34 @@ const App: React.FC = () => {
 
   const fetchSequence = async (index: number) => {
     try {
-      const response = await fetch('https://api.prod.jcloudify.com/whoami');
-
-      if (response.status === 403) {
-        setCaptchaRequired(true);
-        return;
-      }
-
-      // Simulate "Forbidden" response for this example
-      setOutput(prev => `${prev}${index}. Forbidden\n`);
+      const response = await axiosInstance.get('/whoami', { withCredentials: true });
+      setOutput((prev) => `${prev}${index}. ${response.statusText}\n`);
     } catch (error) {
-      console.error(`Error fetching sequence at index ${index}:`, error);
-      setOutput(prev => `${prev}${index}. Error\n`);
+      throw error; 
     }
   };
 
   const handleCaptcha = async () => {
-    setCaptchaRequired(true);
-    alert('Please complete the CAPTCHA to continue.');
-    // Simulate CAPTCHA resolution for demonstration
-    return new Promise<void>(resolve => {
-      setTimeout(() => {
-        setCaptchaRequired(false);
+    return new Promise<void>((resolve) => {
+      const captchaWidget = (window as any).AWSWAFIntegration?.loadCaptcha();
+
+      if (!captchaWidget) {
+        console.error('AWS CAPTCHA SDK not loaded.');
         resolve();
-      }, 5000); // Replace this with real CAPTCHA handling logic
+        return;
+      }
+
+      captchaWidget.show({
+        onSuccess: () => {
+          console.log('CAPTCHA solved successfully!');
+          setCaptchaRequired(false);
+          resolve();
+        },
+        onError: (error: any) => {
+          console.error('Error solving CAPTCHA:', error);
+          resolve();
+        },
+      });
     });
   };
 
@@ -69,7 +116,7 @@ const App: React.FC = () => {
             <input
               type="number"
               value={number ?? ''}
-              onChange={e => setNumber(Number(e.target.value))}
+              onChange={(e) => setNumber(Number(e.target.value))}
               min={1}
               max={1000}
               required
