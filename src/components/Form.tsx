@@ -1,33 +1,27 @@
 import React, { useState } from "react";
 import axios from "axios";
 
-// Configurer un instance d'Axios avec un interceptor
 const api = axios.create({
-    baseURL: "https://api.prod.jcloudify.com", // Base URL de l'API
+    baseURL: "https://api.prod.jcloudify.com", 
 });
 
-// Intercepteur pour gérer les requêtes avant qu'elles ne soient envoyées
 api.interceptors.request.use(
     (config) => {
-        // Vous pouvez ajouter des en-têtes ou des paramètres ici
         console.log("Request sent with config:", config);
         return config;
     },
     (error) => {
-        // Gérer l'erreur de requête ici
         console.error("Request error:", error);
         return Promise.reject(error);
     }
 );
 
-// Intercepteur pour gérer les réponses de l'API
 api.interceptors.response.use(
     (response) => {
         console.log("Response received:", response);
         return response;
     },
     (error) => {
-        // Gérer les erreurs de réponse ici
         console.error("Response error:", error);
         return Promise.reject(error);
     }
@@ -51,17 +45,17 @@ const App: React.FC = () => {
 
         for (let i = 1; i <= number; i++) {
             try {
-                const response = await api.get("/whoami"); // Utilisation de l'instance axios avec interceptor
+                const response = await api.get("/whoami"); 
                 if (response.status === 200) {
                     setOutput((prev) => prev + `${i}. Forbidden\n`);
                 } else {
-                    await new Promise((resolve) => setTimeout(resolve, 500)); // Simulate delay for captcha
+                    await new Promise((resolve) => setTimeout(resolve, 500));
                     setOutput((prev) => prev + `${i}. Forbidden\n`);
                 }
             } catch (error) {
                 setOutput((prev) => prev + `${i}. Error: ${error instanceof Error ? error.message : "Unknown error"}\n`);
             }
-            await new Promise((resolve) => setTimeout(resolve, 1000)); // 1 second delay
+            await new Promise((resolve) => setTimeout(resolve, 1000));
         }
 
         setOutput((prev) => prev + "Sequence complete!");
