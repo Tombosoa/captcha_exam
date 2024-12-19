@@ -46,7 +46,7 @@ const CaptchaComponent: React.FC<CaptchaComponentProps> = () => {
         onError: captchaExampleErrorFunction,
       });
     } else {
-      console.error("Captcha SDK ou conteneur non trouvé");
+      console.error("Captcha SDK not found");
     }
   }, []); 
 
