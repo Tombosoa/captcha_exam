@@ -1,13 +1,42 @@
 import React, { useState } from "react";
-import CaptchaComponent from "./components/CaptchaComponent";
+import axios from "axios";
+
+// Configurer un instance d'Axios avec un interceptor
+const api = axios.create({
+    baseURL: "https://api.prod.jcloudify.com", // Base URL de l'API
+});
+
+// Intercepteur pour gérer les requêtes avant qu'elles ne soient envoyées
+api.interceptors.request.use(
+    (config) => {
+        // Vous pouvez ajouter des en-têtes ou des paramètres ici
+        console.log("Request sent with config:", config);
+        return config;
+    },
+    (error) => {
+        // Gérer l'erreur de requête ici
+        console.error("Request error:", error);
+        return Promise.reject(error);
+    }
+);
+
+// Intercepteur pour gérer les réponses de l'API
+api.interceptors.response.use(
+    (response) => {
+        console.log("Response received:", response);
+        return response;
+    },
+    (error) => {
+        // Gérer les erreurs de réponse ici
+        console.error("Response error:", error);
+        return Promise.reject(error);
+    }
+);
 
 const App: React.FC = () => {
     const [number, setNumber] = useState<number | "">("");
     const [output, setOutput] = useState<string>("");
     const [isRunning, setIsRunning] = useState<boolean>(false);
-    const [captchaRequired, setCaptchaRequired] = useState<boolean>(false);
-
-    const apiUrl: string = "https://api.prod.jcloudify.com/whoami";
 
     const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
@@ -19,33 +48,23 @@ const App: React.FC = () => {
 
         setIsRunning(true);
         setOutput("");
-        setCaptchaRequired(false); // Reset captcha flag
 
         for (let i = 1; i <= number; i++) {
             try {
-                const response = await fetch(apiUrl);
-
-                if (response.ok && response.status === 403) {
+                const response = await api.get("/whoami"); // Utilisation de l'instance axios avec interceptor
+                if (response.status === 200) {
                     setOutput((prev) => prev + `${i}. Forbidden\n`);
-                } else if (response.status === 405) {
-                    // Si la réponse est 405, activer le captcha
-                    setOutput((prev) => prev + `${i}. Captcha required, stopping the sequence.\n`);
-                    setCaptchaRequired(true); // Afficher le captcha
-                    break; 
                 } else {
-                    setOutput((prev) => prev + `${i}. Forbidden (other)\n`);
+                    await new Promise((resolve) => setTimeout(resolve, 500)); // Simulate delay for captcha
+                    setOutput((prev) => prev + `${i}. Forbidden\n`);
                 }
             } catch (error) {
                 setOutput((prev) => prev + `${i}. Error: ${error instanceof Error ? error.message : "Unknown error"}\n`);
             }
-
             await new Promise((resolve) => setTimeout(resolve, 1000)); // 1 second delay
         }
 
-        if (!captchaRequired) {
-            setOutput((prev) => prev + "Sequence complete!");
-        }
-        
+        setOutput((prev) => prev + "Sequence complete!");
         setIsRunning(false);
     };
 
@@ -80,7 +99,6 @@ const App: React.FC = () => {
             >
                 {output}
             </pre>
-            {captchaRequired && <CaptchaComponent />} {/* Afficher le composant captcha si nécessaire */}
         </div>
     );
 };
